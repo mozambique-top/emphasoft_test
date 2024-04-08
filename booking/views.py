@@ -1,10 +1,13 @@
 from datetime import datetime
 
 from django.db.models import Q
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, extend_schema_view
+
+from .filters import RoomFilter
 from .models import Room, Booking
 from .serializers import RoomSerializer, BookingSerializer
 
@@ -15,6 +18,8 @@ from .serializers import RoomSerializer, BookingSerializer
 class RoomList(generics.ListAPIView):
     queryset = Room.objects.all()
     serializer_class = RoomSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = RoomFilter
 
     def get_queryset(self):
         start_date = self.request.query_params.get('start_date')
@@ -37,6 +42,7 @@ class RoomList(generics.ListAPIView):
 
         return queryset
 
+
 @extend_schema_view(
     put=extend_schema(summary='Детали комнат', tags=['Комнаты']),
     patch=extend_schema(summary="Частичное обновление бронирования", tags=['Комнаты'])
@@ -44,6 +50,7 @@ class RoomList(generics.ListAPIView):
 class RoomDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = Room.objects.all()
     serializer_class = RoomSerializer
+
 
 @extend_schema_view(
     get=extend_schema(summary="Получение списка бронирований", tags=['Бронирование']),
@@ -69,6 +76,7 @@ class BookingDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = Booking.objects.all()
     serializer_class = BookingSerializer
 
+
 @extend_schema_view(
     post=extend_schema(summary='Создание брони', tags=['Бронирования']),
 )
@@ -80,6 +88,7 @@ class BookingCreate(generics.CreateAPIView):
     def perform_create(self, serializer):
         # Добавляем пользователя к бронированию перед сохранением
         serializer.save(user=self.request.user)
+
 
 @extend_schema_view(
     delete=extend_schema(summary='Отмена бронирование', tags=['Бронирования']),
