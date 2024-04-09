@@ -18,29 +18,18 @@ from .serializers import RoomSerializer, BookingSerializer
 class RoomList(generics.ListAPIView):
     queryset = Room.objects.all()
     serializer_class = RoomSerializer
+
+
+
+
+@extend_schema_view(
+    get=extend_schema(summary='Поиск комнат', tags=['Комнаты']),
+)
+class RoomListSearch(generics.ListAPIView):
+    queryset = Room.objects.all()
+    serializer_class = RoomSerializer
     filter_backends = [DjangoFilterBackend]
     filterset_class = RoomFilter
-
-    def get_queryset(self):
-        start_date = self.request.query_params.get('start_date')
-        end_date = self.request.query_params.get('end_date')
-
-        if start_date and end_date:
-            # Преобразуйте строки дат в объекты datetime
-            start_date = datetime.strptime(start_date, '%Y-%m-%d')
-            end_date = datetime.strptime(end_date, '%Y-%m-%d')
-
-            # Получите список идентификаторов комнат, забронированных в указанный интервал времени
-            booked_room_ids = Booking.objects.filter(
-                Q(start_date__lte=end_date) & Q(end_date__gte=start_date)
-            ).values_list('room_id', flat=True)
-
-            # Фильтрация комнат, исключая те, которые забронированы в указанный интервал времени
-            queryset = Room.objects.exclude(id__in=booked_room_ids)
-        else:
-            queryset = super().get_queryset()
-
-        return queryset
 
 
 @extend_schema_view(
@@ -48,6 +37,14 @@ class RoomList(generics.ListAPIView):
     patch=extend_schema(summary="Частичное обновление бронирования", tags=['Комнаты'])
 )
 class RoomDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Room.objects.all()
+    serializer_class = RoomSerializer
+
+
+@extend_schema_view(
+    post=extend_schema(summary='Создание комнаты', tags=['Комнаты']),
+)
+class RoomCreate(generics.CreateAPIView):
     queryset = Room.objects.all()
     serializer_class = RoomSerializer
 
@@ -78,7 +75,7 @@ class BookingDetail(generics.RetrieveUpdateDestroyAPIView):
 
 
 @extend_schema_view(
-    post=extend_schema(summary='Создание брони', tags=['Бронирования']),
+    post=extend_schema(summary='Создание брони', tags=['Бронирование']),
 )
 class BookingCreate(generics.CreateAPIView):
     queryset = Booking.objects.all()
@@ -86,30 +83,44 @@ class BookingCreate(generics.CreateAPIView):
     permission_classes = [IsAuthenticated]
 
     def perform_create(self, serializer):
-        # Добавляем пользователя к бронированию перед сохранением
-        serializer.save(user=self.request.user)
+        user = self.request.user
+        room_id = self.request.data.get('room')
+        start_date = self.request.data.get('start_date')
+        end_date = self.request.data.get('end_date')
+
+        try:
+            room = Room.objects.get(id=room_id)
+        except Room.DoesNotExist:
+            return Response({"detail": "Room does not exist."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Проверяем доступность комнаты в указанный период времени
+        if room.is_available(start_date, end_date):
+            serializer.save(user=user, room=room)
+            room.is_available = False  # Помечаем комнату как забронированную
+            room.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        else:
+            return Response({"detail": "Room is not available for the specified dates."}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @extend_schema_view(
-    delete=extend_schema(summary='Отмена бронирование', tags=['Бронирования']),
-    update=extend_schema(summary='Изменить бронирование', tags=['Бронирования'])
+    delete=extend_schema(summary='Отмена бронирования', tags=['Бронирование']),
 )
-class BookingCancelAPIView(generics.UpdateAPIView):
+class BookingCancelAPIView(generics.DestroyAPIView):
     queryset = Booking.objects.all()
     serializer_class = BookingSerializer
     permission_classes = [IsAuthenticated]
 
-    def update(self, request, *args, **kwargs):
-        partial = kwargs.pop('partial', False)
-        instance = self.get_object()
+    def destroy(self, request, *args, **kwargs):
+        booking_id = kwargs.get('pk')
+        try:
+            instance = Booking.objects.get(id=booking_id)
+        except Booking.DoesNotExist:
+            return Response({"detail": "Booking does not exist."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Проверяем, что текущий пользователь является владельцем бронирования или суперпользователем
-        if request.user == instance.user or request.user.is_superuser:
-            instance.cancel()
-            serializer = self.get_serializer(instance, data=request.data, partial=partial)
-            serializer.is_valid(raise_exception=True)
-            self.perform_update(serializer)
-            return Response(serializer.data)
+        if instance.status != 'cancelled':
+            instance.status = 'cancelled'
+            instance.delete()
+            return Response({"detail": "Booking cancelled and deleted successfully."}, status=status.HTTP_200_OK)
         else:
-            return Response({"detail": "You do not have permission to cancel this booking."},
-                            status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": "Booking is already cancelled."}, status=status.HTTP_400_BAD_REQUEST)
