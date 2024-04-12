@@ -1,6 +1,6 @@
 from django.urls import path
 from .views import RoomList, BookingList, BookingUpdateAndCreate, RoomListSearch, \
-    BookingCancelAPIView,
+    BookingCancelAPIView
 
 urlpatterns = [
     path('rooms/', RoomList.as_view(), name='room-list'),
