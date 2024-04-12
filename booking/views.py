@@ -16,19 +16,14 @@ class RoomAPIView(generics.ListAPIView, generics.RetrieveUpdateDestroyAPIView, g
 
 @extend_schema_view(
     get=extend_schema(summary='Список комнат', tags=['Комнаты']),
+    put=extend_schema(summary='Детали комнат', tags=['Комнаты']),
+    patch=extend_schema(summary="Частичное обновление бронирования", tags=['Комнаты']),
     post=extend_schema(summary='Создание комнаты', tags=['Комнаты']),
 )
-class RoomListAndCreate(RoomAPIView):
+class RoomList(RoomAPIView):
     queryset = Room.objects.all()
     serializer_class = RoomSerializer
 
-@extend_schema_view(
-    put=extend_schema(summary='Детали комнат', tags=['Комнаты']),
-    patch=extend_schema(summary="Частичное обновление бронирования", tags=['Комнаты'])
-)
-class RoomDetail(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Room.objects.all()
-    serializer_class = RoomSerializer
 
 @extend_schema_view(
     get=extend_schema(summary='Поиск комнат', tags=['Комнаты']),
