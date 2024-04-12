@@ -1,6 +1,4 @@
-from datetime import datetime
 
-from django.db.models import Q
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
@@ -12,25 +10,17 @@ from .models import Room, Booking
 from .serializers import RoomSerializer, BookingSerializer
 
 
+class RoomAPIView(generics.ListAPIView, generics.RetrieveUpdateDestroyAPIView, generics.CreateAPIView):
+    pass
+
+
 @extend_schema_view(
     get=extend_schema(summary='Список комнат', tags=['Комнаты']),
+    post=extend_schema(summary='Создание комнаты', tags=['Комнаты']),
 )
-class RoomList(generics.ListAPIView):
+class RoomListAndCreate(RoomAPIView):
     queryset = Room.objects.all()
     serializer_class = RoomSerializer
-
-
-
-
-@extend_schema_view(
-    get=extend_schema(summary='Поиск комнат', tags=['Комнаты']),
-)
-class RoomListSearch(generics.ListAPIView):
-    queryset = Room.objects.all()
-    serializer_class = RoomSerializer
-    filter_backends = [DjangoFilterBackend]
-    filterset_class = RoomFilter
-
 
 @extend_schema_view(
     put=extend_schema(summary='Детали комнат', tags=['Комнаты']),
@@ -40,13 +30,14 @@ class RoomDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = Room.objects.all()
     serializer_class = RoomSerializer
 
-
 @extend_schema_view(
-    post=extend_schema(summary='Создание комнаты', tags=['Комнаты']),
+    get=extend_schema(summary='Поиск комнат', tags=['Комнаты']),
 )
-class RoomCreate(generics.CreateAPIView):
+class RoomListSearch(generics.ListAPIView):
     queryset = Room.objects.all()
     serializer_class = RoomSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = RoomFilter
 
 
 @extend_schema_view(
@@ -66,41 +57,14 @@ class BookingList(generics.ListCreateAPIView):
 @extend_schema_view(
     put=extend_schema(summary="Обновление бронирования", tags=['Бронирование']),
     patch=extend_schema(summary="Частичное обновление бронирования", tags=['Бронирование']),
+    post=extend_schema(summary='Создание бронирования', tags=['Бронирование']),
 
 )
-class BookingDetail(generics.RetrieveUpdateDestroyAPIView):
+class BookingUpdateAndCreate(generics.RetrieveUpdateDestroyAPIView, generics.CreateAPIView):
     permission_classes = [IsAuthenticated]
     queryset = Booking.objects.all()
     serializer_class = BookingSerializer
 
-
-@extend_schema_view(
-    post=extend_schema(summary='Создание брони', tags=['Бронирование']),
-)
-class BookingCreate(generics.CreateAPIView):
-    queryset = Booking.objects.all()
-    serializer_class = BookingSerializer
-    permission_classes = [IsAuthenticated]
-
-    def perform_create(self, serializer):
-        user = self.request.user
-        room_id = self.request.data.get('room')
-        start_date = self.request.data.get('start_date')
-        end_date = self.request.data.get('end_date')
-
-        try:
-            room = Room.objects.get(id=room_id)
-        except Room.DoesNotExist:
-            return Response({"detail": "Room does not exist."}, status=status.HTTP_404_NOT_FOUND)
-
-        # Проверяем доступность комнаты в указанный период времени
-        if room.is_available(start_date, end_date):
-            serializer.save(user=user, room=room)
-            room.is_available = False  # Помечаем комнату как забронированную
-            room.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        else:
-            return Response({"detail": "Room is not available for the specified dates."}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @extend_schema_view(
